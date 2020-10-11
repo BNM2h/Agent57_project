@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-from network import Qnet,target_Qnet
+from network import Qnet
 import torch
 import time
 import cv2
@@ -8,13 +8,14 @@ import random
 from memory import Memory
 import torch.nn.functional as F
 
-memory=Memory(100,300)
+memory=Memory(1000,300)
 env=gym.make('Pong-v0')
-net=Qnet().to('cuda:0')
-target_net=target_Qnet()
+net=Qnet().to('cuda')
+target_net=Qnet().to('cuda')
 obs=env.reset()
+epsilon=1.0
 gamma=0.99
-optimizer = torch.optim.Adam(net.parameters(),lr=0.001)
+optimizer = torch.optim.Adam(net.parameters())
 
 def p_obs(obs):
     #210,160,3 to 3*160*210 -> 
@@ -24,10 +25,10 @@ def p_obs(obs):
     # cv2.imshow('obs',img)
     # cv2.waitKey(3)
     obs=obs.T
-    return obs
+    return obs/255.0
 
 def get_action(obs,epsilon):
-    qvalue=net(obs.to('cuda:0')).cpu()
+    qvalue=net(obs).cpu()
     if np.random.rand()>epsilon:
         _, action = torch.max(qvalue[0],1)
         action=action.item()
@@ -36,23 +37,24 @@ def get_action(obs,epsilon):
         action=random.randint(0,5)
     return action
 def epislon_decay(ep):
-    return ep*0.98
+    return ep*0.99
 
 def train():
+    #print('train')
     batch_size=16
-    sequence_length=5
+    sequence_length=8
     batch=memory.sample(batch_size,sequence_length)
     states = torch.stack(batch.state).view(batch_size, sequence_length,3,160,210)
     next_states = torch.stack(batch.next_state).view(batch_size, sequence_length,3,160,210)
     actions = torch.stack(batch.action).view(batch_size, sequence_length, -1).long()
     rewards = torch.stack(batch.reward).view(batch_size, sequence_length, -1)
     masks = torch.stack(batch.mask).view(batch_size, sequence_length, -1)
-    pred= net(states.to('cuda:0'),train=True)
-    pred = pred.gather(1, actions.to('cuda:0'))
-    next_pred=target_net(next_states)
-    next_pred=next_pred.max(-1, keepdim=True)[0]#.to('cuda:0')
-    target = rewards + masks * gamma * next_pred
-    loss = F.mse_loss(pred, target.to('cuda').detach())
+    pred= net(states,train=True).to('cuda')
+    pred = pred.gather(1, actions.to('cuda'))
+    next_pred=target_net(next_states,train=True)
+    next_pred=next_pred.max(-1, keepdim=True)[0].to('cuda')
+    target = rewards.to('cuda') + masks.to('cuda') * gamma * next_pred
+    loss = F.mse_loss(pred, target.detach())
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -60,33 +62,29 @@ def train():
 
 def target_update():
     target_net.load_state_dict(net.state_dict())
-def main():
-    epsilon=1.0
-    for ep in range(3000):
-        obs=env.reset()
-        obs=p_obs(obs)
-        obs=torch.from_numpy(obs).float().unsqueeze(0)
-        done=False
-        print('episode:',ep,'epsilon: ',epsilon)
-        step=0
-        while not done:
-            step+=1
-            env.render()
-            action=get_action(obs,epsilon)
-            next_obs,reward,done,info=env.step(action)
-            next_obs=p_obs(next_obs)
-            next_obs=torch.from_numpy(next_obs).float().unsqueeze(0)
-            if step>300:
-                done=True
-            mask= 1 if not done else 0
-            memory.push(obs.squeeze(0), next_obs.squeeze(0), action, reward, mask)
-            obs=next_obs
-            if ep>20:
-                train()
-        net.reset()
-        if (ep%10==0) and (ep!=0):
-            target_update()
-            epsilon=epislon_decay(epsilon)
-            
-if __name__ == '__main__':
-    main()
+
+for ep in range(3000):
+    obs=env.reset()
+    obs=p_obs(obs)
+    obs=torch.from_numpy(obs).float().unsqueeze(0)
+    done=False
+    print('episode:',ep,'epsilon: ',epsilon)
+    step=0
+    while not done:
+        step+=1
+        env.render()
+        action=get_action(obs,epsilon)
+        next_obs,reward,done,info=env.step(action)
+        next_obs=p_obs(next_obs)
+        next_obs=torch.from_numpy(next_obs).float().unsqueeze(0)
+        if step>300:
+            done=True
+        mask= 1 if not done else 0
+        memory.push(obs.squeeze(0), next_obs.squeeze(0), action, reward, mask)
+        obs=next_obs
+        if ep>20:
+            train()
+    net.reset()
+    if (ep%20==0) and (ep!=0):
+        target_update()
+        epsilon=epislon_decay(epsilon)
