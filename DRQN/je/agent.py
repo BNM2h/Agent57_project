@@ -14,8 +14,8 @@ net=Qnet().to('cuda')
 target_net=Qnet().to('cuda')
 obs=env.reset()
 epsilon=1.0
-gamma=0.99
-optimizer = torch.optim.Adam(net.parameters())
+gamma=0.98
+optimizer = torch.optim.Adam(net.parameters(),lr=0.01)
 
 def p_obs(obs):
     #210,160,3 to 3*160*210 -> 
@@ -37,28 +37,31 @@ def get_action(obs,epsilon):
         action=random.randint(0,5)
     return action
 def epislon_decay(ep):
-    return ep*0.99
+    return ep*0.995
 
 def train():
+    try:
     #print('train')
-    batch_size=16
-    sequence_length=8
-    batch=memory.sample(batch_size,sequence_length)
-    states = torch.stack(batch.state).view(batch_size, sequence_length,3,160,210)
-    next_states = torch.stack(batch.next_state).view(batch_size, sequence_length,3,160,210)
-    actions = torch.stack(batch.action).view(batch_size, sequence_length, -1).long()
-    rewards = torch.stack(batch.reward).view(batch_size, sequence_length, -1)
-    masks = torch.stack(batch.mask).view(batch_size, sequence_length, -1)
-    pred= net(states,train=True).to('cuda')
-    pred = pred.gather(1, actions.to('cuda'))
-    next_pred=target_net(next_states,train=True)
-    next_pred=next_pred.max(-1, keepdim=True)[0].to('cuda')
-    target = rewards.to('cuda') + masks.to('cuda') * gamma * next_pred
-    loss = F.mse_loss(pred, target.detach())
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    torch.cuda.empty_cache()
+        batch_size=16
+        sequence_length=8
+        batch=memory.sample(batch_size,sequence_length)
+        states = torch.stack(batch.state).view(batch_size, sequence_length,3,160,210)
+        next_states = torch.stack(batch.next_state).view(batch_size, sequence_length,3,160,210)
+        actions = torch.stack(batch.action).view(batch_size, sequence_length, -1).long()
+        rewards = torch.stack(batch.reward).view(batch_size, sequence_length, -1)
+        masks = torch.stack(batch.mask).view(batch_size, sequence_length, -1)
+        pred= net(states,train=True).to('cuda')
+        pred = pred.gather(1, actions.to('cuda'))
+        next_pred=target_net(next_states,train=True)
+        next_pred=next_pred.max(-1, keepdim=True)[0].to('cuda')
+        target = rewards.to('cuda') + masks.to('cuda') * gamma * next_pred
+        loss = F.mse_loss(pred, target.detach())
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        #torch.cuda.empty_cache()
+    except RuntimeError:
+        pass
 
 def target_update():
     target_net.load_state_dict(net.state_dict())
@@ -70,6 +73,7 @@ for ep in range(3000):
     done=False
     print('episode:',ep,'epsilon: ',epsilon)
     step=0
+    score=0
     while not done:
         step+=1
         env.render()
@@ -77,6 +81,7 @@ for ep in range(3000):
         next_obs,reward,done,info=env.step(action)
         next_obs=p_obs(next_obs)
         next_obs=torch.from_numpy(next_obs).float().unsqueeze(0)
+        score+=reward
         if step>300:
             done=True
         mask= 1 if not done else 0
@@ -85,6 +90,7 @@ for ep in range(3000):
         if ep>20:
             train()
     net.reset()
+    epsilon=epislon_decay(epsilon)
+    print('score: ', score)
     if (ep%20==0) and (ep!=0):
         target_update()
-        epsilon=epislon_decay(epsilon)
