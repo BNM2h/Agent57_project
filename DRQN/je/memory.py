@@ -18,8 +18,8 @@ class Memory(object):
         if mask == 0:
             while len(self.local_memory) < self.step:
                 self.local_memory.insert(0, Transition(
-                    torch.zeros((3,160,210)),
-                    torch.zeros((3,160,210)),
+                    torch.zeros((160,210)),
+                    torch.zeros((160,210)),
                     0,
                     0,
                     0,
@@ -35,7 +35,7 @@ class Memory(object):
         batch_indexes = np.random.choice(np.arange(len(self.memory)), batch_size, p=p)
         
         for batch_idx in batch_indexes:
-            for _ in range(2):
+            for _ in range(4):
                 episode = self.memory[batch_idx]
                 start = random.randint(0, len(episode) - sequence_length)
                 transitions = episode[start:start + sequence_length]
