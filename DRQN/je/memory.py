@@ -35,16 +35,17 @@ class Memory(object):
         batch_indexes = np.random.choice(np.arange(len(self.memory)), batch_size, p=p)
         
         for batch_idx in batch_indexes:
-            episode = self.memory[batch_idx]
-            start = random.randint(0, len(episode) - sequence_length)
-            transitions = episode[start:start + sequence_length]
-            batch = Transition(*zip(*transitions))
+            for _ in range(2):
+                episode = self.memory[batch_idx]
+                start = random.randint(0, len(episode) - sequence_length)
+                transitions = episode[start:start + sequence_length]
+                batch = Transition(*zip(*transitions))
 
-            batch_state.append(torch.stack(list(batch.state)))
-            batch_next_state.append(torch.stack(list(batch.next_state)))
-            batch_action.append(torch.Tensor(list(batch.action)))
-            batch_reward.append(torch.Tensor(list(batch.reward)))
-            batch_mask.append(torch.Tensor(list(batch.mask)))
+                batch_state.append(torch.stack(list(batch.state)))
+                batch_next_state.append(torch.stack(list(batch.next_state)))
+                batch_action.append(torch.Tensor(list(batch.action)))
+                batch_reward.append(torch.Tensor(list(batch.reward)))
+                batch_mask.append(torch.Tensor(list(batch.mask)))
         
         return Transition(batch_state, batch_next_state, batch_action, batch_reward, batch_mask)
 

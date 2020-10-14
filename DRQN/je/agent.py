@@ -16,6 +16,7 @@ obs=env.reset()
 epsilon=1.0
 gamma=0.98
 optimizer = torch.optim.Adam(net.parameters(),lr=0.01)
+epsilon_min=0.001
 
 def p_obs(obs):
     #210,160,3 to 3*160*210 -> 
@@ -29,6 +30,7 @@ def p_obs(obs):
 
 def get_action(obs,epsilon):
     qvalue=net(obs).cpu()
+   # print(qvalue)
     if np.random.rand()>epsilon:
         _, action = torch.max(qvalue[0],1)
         action=action.item()
@@ -42,7 +44,7 @@ def epislon_decay(ep):
 def train():
     try:
     #print('train')
-        batch_size=16
+        batch_size=16*2
         sequence_length=8
         batch=memory.sample(batch_size,sequence_length)
         states = torch.stack(batch.state).view(batch_size, sequence_length,3,160,210)
@@ -51,7 +53,7 @@ def train():
         rewards = torch.stack(batch.reward).view(batch_size, sequence_length, -1)
         masks = torch.stack(batch.mask).view(batch_size, sequence_length, -1)
         pred= net(states,train=True).to('cuda')
-        pred = pred.gather(1, actions.to('cuda'))
+        pred = pred.gather(2, actions.to('cuda'))
         next_pred=target_net(next_states,train=True)
         next_pred=next_pred.max(-1, keepdim=True)[0].to('cuda')
         target = rewards.to('cuda') + masks.to('cuda') * gamma * next_pred
@@ -90,7 +92,8 @@ for ep in range(3000):
         if ep>20:
             train()
     net.reset()
-    epsilon=epislon_decay(epsilon)
+    if epsilon>epsilon_min:
+        epsilon=epislon_decay(epsilon)
     print('score: ', score)
     if (ep%20==0) and (ep!=0):
         target_update()

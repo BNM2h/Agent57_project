@@ -24,8 +24,8 @@ class Qnet(nn.Module):
         self.hx=Variable(torch.zeros(1,1,512)).type(FLOAT).to('cuda')
         self.cx=Variable(torch.zeros(1,1,512)).type(FLOAT).to('cuda')
 
-        # nn.init.kaiming_normal_(self.fc1.weight.data)
-        # nn.init.kaiming_normal_(self.fc2.weight.data)
+        #nn.init.kaiming_normal_(self.fc1.weight.data)
+        nn.init.kaiming_normal_(self.fc2.weight.data)
         # #nn.init.kaiming_normal_(self.fc3.weight.data)
         # nn.init.kaiming_normal_(self.fc5.weight.data)
 
