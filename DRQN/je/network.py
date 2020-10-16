@@ -88,7 +88,7 @@ class Qnet2(nn.Module):
         # self.bn3 = nn.BatchNorm2d(32)
         # self.lstm = nn.LSTM(11264, 512)
         # self.fc2 = nn.Linear(512, 6)
-        self.c1 = nn.Conv2d(8, 32, 8, stride=4)
+        self.c1 = nn.Conv2d(4, 32, 8, stride=4)
         self.attention_layer = MultiHeadAttention(32)
         self.c2 = nn.Conv2d(32, 64, 4, stride=2)
         self.c3 = nn.Conv2d(64, 32, 3, stride=1)
